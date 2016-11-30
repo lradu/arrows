@@ -21,50 +21,80 @@ window.onload = function()
     var diagram = gd.diagram()
         .scaling(gd.scaling.centerOrScaleDiagramToFitSvg)
         .overlay(function(layoutModel, view) {
-            var nodeOverlays = view.selectAll("circle.node.overlay")
+            var nodeOverlays = view.selectAll("rect.node.overlay")
                 .data(layoutModel.nodes);
 
             nodeOverlays.exit().remove();
 
-            nodeOverlays.enter().append("circle")
+            nodeOverlays.enter().append("rect")
                 .attr("class", "node overlay")
                 .call( d3.behavior.drag().on( "drag", drag ).on( "dragend", dragEnd ) )
                 .on( "dblclick", editNode );
 
             nodeOverlays
-                .attr("r", function(node) {
-                    return node.radius.outside();
+                .attr("width", function(node) {
+                    return node.radius.outside() * 2;
+                })
+                .attr("height", function(node) {
+                    return node.radius.outside() * 2;
                 })
                 .attr("stroke", "none")
                 .attr("fill", "rgba(255, 255, 255, 0)")
-                .attr("cx", function(node) {
-                    return node.x;
+                .attr("rx", function(node) {
+                    if(node.model.isRectangle())
+                        return "30";
+                    else
+                        return node.radius.outside();
                 })
-                .attr("cy", function(node) {
-                    return node.y;
+                .attr("ry", function(node) {
+                    if(node.model.isRectangle())
+                        return "30";
+                    else
+                        return node.radius.outside();
+                })
+                .attr("x", function(node) {
+                    return node.x - node.radius.outside() + node.radius.borderWidth / 2;
+                })
+                .attr("y", function(node) {
+                    return node.y - node.radius.outside() + node.radius.borderWidth / 2;
                 });
 
-            var nodeRings = view.selectAll("circle.node.ring")
+            var nodeRings = view.selectAll("rect.node.ring")
                 .data(layoutModel.nodes);
 
             nodeRings.exit().remove();
 
-            nodeRings.enter().append("circle")
+            nodeRings.enter().append("rect")
                 .attr("class", "node ring")
                 .call( d3.behavior.drag().on( "drag", dragRing ).on( "dragend", dragEnd ) );
 
             nodeRings
-                .attr("r", function(node) {
-                    return node.radius.outside() + 5;
+                .attr("width", function(node) {
+                    return node.radius.outside() * 2 + node.radius.borderWidth;
+                })
+                .attr("height", function(node) {
+                    return node.radius.outside() * 2 + node.radius.borderWidth;
                 })
                 .attr("fill", "none")
                 .attr("stroke", "rgba(255, 255, 255, 0)")
                 .attr("stroke-width", "10px")
-                .attr("cx", function(node) {
-                    return node.x;
+                .attr("rx", function(node) {
+                    if(node.model.isRectangle())
+                        return "35";
+                    else
+                        return node.radius.outside() + node.radius.borderWidth;
                 })
-                .attr("cy", function(node) {
-                    return node.y;
+                .attr("ry", function(node) {
+                    if(node.model.isRectangle())
+                        return "35";
+                    else
+                        return node.radius.outside() + node.radius.borderWidth;
+                })
+                .attr("x", function(node) {
+                    return node.x - node.radius.outside();
+                })
+                .attr("y", function(node) {
+                    return node.y - node.radius.outside();
                 });
 
             var relationshipsOverlays = view.selectAll("path.relationship.overlay")
@@ -202,13 +232,33 @@ window.onload = function()
         captionField.node().value = node.caption() || "";
         captionField.node().select();
 
+
         var propertiesField = editor.select("#node_properties");
         propertiesField.node().value = node.properties().list().reduce(function(previous, property) {
             return previous + property.key + ": " + property.value + "\n";
         }, "");
 
+        //current color values
+        var backgroundColor = editor.select("#node_bg_color").node(); 
+        var textColor = editor.select("#node_txt_color").node();
+        backgroundColor.value = node.style("background-color");
+        textColor.value = node.style("color");
+
         function saveChange()
         {
+            //updating node's text and background color
+            node.style("background-color", backgroundColor.value);
+            node.style("color", textColor.value);
+
+            //updating node's shape
+            selectedShape = editor.select("#node-shape").node().value;
+            if(selectedShape == "Circle") {
+                node.isRectangle(false);
+            }
+            else {
+                node.isRectangle(true);
+            }
+
             node.caption( captionField.node().value );
             node.properties().clearAll();
             propertiesField.node().value.split("\n").forEach(function(line) {
@@ -221,6 +271,7 @@ window.onload = function()
                     }
                 }
             });
+
             save( formatMarkup() );
             draw();
             cancelModal();
@@ -412,6 +463,18 @@ window.onload = function()
         cancelModal();
     });
 
+    //updating diagram title
+    var editDiagramTitle = function()
+    {
+        appendModalBackdrop();
+        d3.select( ".modal.edit-diagram-title" ).classed( "hide", false );
+    };
+
+    d3.select("#save_diagram_title" ).on("click", function() {
+        d3.select("#editDiagramTitle").node().innerHTML = d3.select("#diagram_title").node().value;
+        cancelModal();
+    });
+
     function changeInternalScale() {
         graphModel.internalScale(d3.select("#internalScale").node().value);
         draw();
@@ -424,6 +487,7 @@ window.onload = function()
     d3.select( "#exportSvgButton" ).on( "click", exportSvg );
 	d3.select( "#exportCypherButton" ).on( "click", exportCypher );
     d3.select( "#chooseStyleButton" ).on( "click", chooseStyle );
+    d3.select( "#editDiagramTitle" ).on( "click", editDiagramTitle);
     d3.selectAll( ".modal-dialog" ).on( "click", function ()
     {
         d3.event.stopPropagation();
